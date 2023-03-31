@@ -1,0 +1,75 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+import spacy
+import pandas as pd
+
+# to open/read the dataset
+with open('/Users/laila/Downloads/ind_news_2022_10K/ind_news_2022_10K-sentences.txt') as f:
+    text = list(f)
+
+# to extract candidates of nominal MWEs with verbal modifier
+def extract_mwe(data):
+    nlp = spacy.load("/Users/laila/Downloads/Models/Spacy2.1.x/NER/id_ud-tag-dep-ner-1.0.0/id_ud-tag-dep-ner/id_ud-tag-dep-ner-1.0.0")
+    dep = ['amod', 'compound']
+    mwe_candidates = []
+    for sentence in text:
+        doc = nlp(sentence)
+        for token in doc:
+            if token.dep_ in dep and token.pos_ == 'VERB' and token.head.pos_ == 'NOUN':
+                candidates = (sentence, token.head.text, token.text)
+                mwe_candidates.append(candidates)
+    return mwe_candidates
+
+# to check the model precision by checking on Kateglo (an Indonesian dictionary)
+# ideally we want to check on KBBI, the national dictionary, but the infrastructure doesn't allow for big dataset
+def check_dict(data):
+    with open('/Users/laila/Downloads/kateglo_wordlist.txt', 'r', encoding='utf-16') as f:
+        kateglo = f.readlines()
+        kateglo_list = list(kateglo)
+        kateglo_list = list(map(str.strip, kateglo_list))
+    result = []
+    for item in data:
+        if item in kateglo_list:
+            result.append('mwe')
+        else:
+            result.append('not mwe')
+    return result
+
+###################################### UNUSED CODES ############################################
+# to check whether the extracted MWE is indeed an MWE by checking KBBI (the national dictionary)
+# this method only work for small dataset (less than 500) and our data is around 1000
+# from kbbi import KBBI, TidakDitemukan
+# def check_dict_option1(data):
+#     result = []
+#     for item in data:
+#         try:
+#             if KBBI(item):
+#                 result.append("mwe")
+#         except TidakDitemukan:
+#                 pass
+#     return result
+################################################################################################
+             
+def main():
+    
+    # extract the MWE candidates
+    extraction = extract_mwe(text)
+    print(len(extraction))
+    
+    # put it to DataFrame for feasibility
+    df = pd.DataFrame(extraction, columns=['Sentence','MWE head','MWE modifier'])
+    df["MWE"] = df['MWE head'].astype(str) +" "+ df["MWE modifier"]
+    df = df.drop(columns=['MWE head','MWE modifier'])
+    
+    # save the extracted MWE in a list
+    mwe_list = df['MWE'].tolist()
+    check_mwe = check_dict(mwe_list)
+    
+    # add the eval result to the DataFrame
+    df['Eval'] = check_mwe
+    print(df[:10])
+    
+    # save the DataFrame into csv file
+    df.to_csv('mwe_candidates.csv')
+  
+main()
